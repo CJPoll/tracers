@@ -1,7 +1,5 @@
-# Code.eval_file("scripts/graph.ex")
-
 defmodule Mix.Tasks.Tracer.Function do
-  use Mix.Task
+  use Tracers.Task, gen_pdf: :boolean
 
   @table_name :function_deps
   # @ignore_applications [
@@ -73,16 +71,8 @@ defmodule Mix.Tasks.Tracer.Function do
     Timex
   ]
 
-  def run(args) do
-    {opts, _, _} = OptionParser.parse(args, strict: [gen_pdf: :boolean])
+  def precompile(_opts) do
     :ets.new(@table_name, [:named_table, :public])
-
-    Mix.Task.clear()
-    Mix.Task.run("compile", ["--force", "--tracer", __MODULE__] |> IO.inspect(lable: "Command"))
-
-    compilation_finished(opts)
-
-    :ok
   end
 
   def trace({:local_function, meta, name, arity}, env) do
@@ -91,6 +81,7 @@ defmodule Mix.Tasks.Tracer.Function do
 
   def trace({:remote_function, _meta, module, name, arity} = data, env) do
     IO.inspect("Remote function call detected")
+
     if should_record_function({module, name, arity}, env) do
       do_trace(data, env)
     else
@@ -153,11 +144,15 @@ defmodule Mix.Tasks.Tracer.Function do
     end
   end
 
-  def compilation_finished(opts \\ []) do
+  def postcompile({:ok, diagnostics}, opts) do
     graph = :ets.foldl(&reduce/2, Graph.new(), @table_name)
 
-    analyze(graph, opts)
+    :ok = analyze(graph, opts)
+
+    {:ok, diagnostics}
   end
+
+  def postcompile(status, _opts), do: status
 
   def reduce({{caller, callee}}, graph) do
     Graph.add_edge(graph, caller, callee)
@@ -171,6 +166,8 @@ defmodule Mix.Tasks.Tracer.Function do
     if Keyword.get(opts, :gen_pdf, false) do
       System.cmd("dot", ["-Tpdf", dotfile_path, "-o", pdf_path])
     end
+
+    :ok
   end
 
   def assert_true(true), do: :ok

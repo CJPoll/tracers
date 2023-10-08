@@ -1,5 +1,5 @@
 defmodule Graph do
-  defstruct vertices: MapSet.new(), edges: %{}, metadata: %{}
+  defstruct vertices: MapSet.new(), edges: %{}, metadata: %{edges: %{}}
 
   def new, do: %__MODULE__{}
 
@@ -15,15 +15,25 @@ defmodule Graph do
     end
   end
 
-  def add_edge(%__MODULE__{edges: edges} = graph, v1, v2) do
+  def add_edge(%__MODULE__{} = graph, v1, v2) do
+    add_edge(graph, v1, v2, [])
+  end
+
+  def add_edge(
+        %__MODULE__{edges: edges, metadata: %{edges: edge_metadata} = graph_metadata} = graph,
+        v1,
+        v2,
+        metadata
+      ) do
     graph =
       graph
       |> add_vertex(v1)
       |> add_vertex(v2)
 
     edges = Map.update(edges, v1, MapSet.new([v2]), &MapSet.put(&1, v2))
+    edge_metadata = Map.update(edge_metadata, {v1, v2}, [metadata], &[metadata | &1])
 
-    %__MODULE__{graph | edges: edges}
+    %__MODULE__{graph | edges: edges, metadata: %{graph_metadata | edges: edge_metadata}}
   end
 
   def direct_children(%__MODULE__{edges: edges}, vertex) do
@@ -49,6 +59,10 @@ defmodule Graph do
       MapSet.union(acc, transitive_deps)
     end)
     |> MapSet.union(direct_children)
+  end
+
+  def path_to(%__MODULE__{} = graph, parent, child) do
+    child in transitive_children(graph, parent)
   end
 
   def path_to?(%__MODULE__{} = graph, parent, child) do
